@@ -1,0 +1,42 @@
+name: Build and deploy staging to AWS
+on:
+  pull_request:
+  push:
+    branches: [ main ]
+jobs:
+  checkout-repos:
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          repository: 'stader-labs/ethx'
+  build-deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./ci-cd-pipeline-for-smart-contracts/front-end-cd
+    strategy:
+      matrix:
+        node: [ 18 ]
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-node@v2
+        with:
+          node-version: ${{ matrix.node }}
+      - uses: actions/cache@v2
+        with:
+          path: '**/node_modules'
+          key: ${{ runner.os }}-modules-${{ hashFiles('**/yarn.lock') }}
+      - id: 'auth'
+        uses: 'google-github-actions/auth@v0'
+        with:
+          credentials_json: '${{ secrets.GCP_CREDENTIALS }}'
+      - name: 'Set up Cloud SDK'
+        uses: 'google-github-actions/setup-gcloud@v0'
+      - name: Build React App
+        run: yarn install && yarn run build:cd
+        env:
+          TENDERLY_FORK_URL: ${{ secrets.TENDERLY_FORK_URL }}
+          REACT_APP_ENV: staging
+      - name: Deploy app build to GCS bucket
+        run: |-
+          gsutil -m rsync -R ./build gs://${{secrets.GCS_BUCKET}}/${{github.run_id}}
