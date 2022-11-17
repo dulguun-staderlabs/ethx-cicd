@@ -10,6 +10,8 @@ jobs:
       - uses: actions/checkout@v2
         with:
           repository: 'stader-labs/ethx@main'
+          token: ${{ secrets.github_token }}
+          path: smart-contract
   build-deploy:
     runs-on: ubuntu-latest
     defaults:
