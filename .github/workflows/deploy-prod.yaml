@@ -1,0 +1,54 @@
+name: Build and deploy prod to AWS
+on:
+  pull_request:
+  push:
+    branches: [ main ]
+jobs:
+  checkout-repos:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          repository: 'stader-labs/ethx@main'
+          token: ${{ secrets.github_token }}
+          path: smart-contract
+      - uses: actions/checkout@v2
+        with:
+          repository: 'stader-labs/ethx-frontend@main'
+          token: ${{ secrets.github_token }}
+          path: frontend
+  build-deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./cicd
+    strategy:
+      matrix:
+        node: [ 18 ]
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-node@v2
+        with:
+          node-version: ${{ matrix.node }}
+      - uses: actions/cache@v2
+        with:
+          path: '**/node_modules'
+          key: ${{ runner.os }}-modules-${{ hashFiles('**/yarn.lock') }}
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-2
+      - name: Run CodeBuild
+        uses: aws-actions/aws-codebuild-run-build@v1
+        with:
+          project-name: ETHX
+      - name: Build React App
+        run: npm install && npm run build:cd
+        env:
+          RPC: ${{ secrets.ALCHEMY_URL }}
+          REACT_APP_ENV: staging
+      - name: Deploy app build to AWS S3
+        run: |-
+          aws -m rsync -R ./build s3://${{secrets.AWS_BUCKET}}/${{github.run_id}}
